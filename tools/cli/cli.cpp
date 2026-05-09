@@ -428,6 +428,27 @@ int main(int argc, char ** argv) {
     if (!params.system_prompt.empty()) {
         console::log("using custom system prompt\n");
     }
+
+    // Print backend and device information
+    console::log("\n=== Backend Devices ===\n");
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        auto * dev = ggml_backend_dev_get(i);
+        console::log("Device %zu: %s (%s)\n", i, ggml_backend_dev_name(dev), ggml_backend_dev_description(dev));
+
+        ggml_backend_dev_props props;
+        ggml_backend_dev_get_props(dev, &props);
+        if (props.device_id) {
+            console::log("  Device ID: %s\n", props.device_id);
+        }
+        console::log("  Free Memory: %zu MiB\n", props.memory_free / 1024 / 1024);
+    }
+
+    console::log("\n=== Backend Registrations ===\n");
+    for (size_t i = 0; i < ggml_backend_reg_count(); i++) {
+        auto * reg = ggml_backend_reg_get(i);
+        console::log("Backend %zu: %s\n", i, ggml_backend_reg_name(reg));
+    }
+    
     console::log("\n");
     console::log("available commands:\n");
     console::log("  /exit or Ctrl+C     stop or exit\n");
