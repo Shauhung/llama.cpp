@@ -34,6 +34,12 @@
 /.vscode/
 /nppBackup
 
+# Python virtual environments
+
+/venv/
+/env/
+/.venv/
+
 # Coverage
 
 /gcovr-report/
