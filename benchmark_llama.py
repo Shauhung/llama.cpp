@@ -146,14 +146,12 @@ def get_model_info():
         return None
 
 # --- 2. 獲取 RAM 使用量 (GB) ---
-def get_llama_ram():
-    for proc in psutil.process_iter(['name']):
-        try:
-            if 'llama-server' in proc.info['name']:
-                return proc.memory_info().rss / (1024 ** 3)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return 0
+def get_llama_ram(pid):
+    try:
+        proc = psutil.Process(pid)
+        return proc.memory_info().rss / (1024 ** 3)
+    except (psutil.NoSuchProcess, psutil.AccessDenied):
+        return 0
 
 # 開始執行
 print("=" * 70)
@@ -189,7 +187,7 @@ for idx, (model_path, ctx_size) in enumerate(MODELS, 1):
 
     for i in range(N_RUNS):
         # 紀錄 RAM
-        current_ram = get_llama_ram()
+        current_ram = get_llama_ram(proc.pid)
         ram_usages.append(current_ram)
 
         payload = {
