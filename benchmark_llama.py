@@ -1,39 +1,43 @@
+#!/usr/bin/env python3
+"""
+llama-server Load Testing & Latency Benchmarking
+收集完整的延遲指標：TTFT、p50、p95、p99、error_rate 等
+"""
+
 import time
 import requests
 import statistics
 import csv
+import json
 import os
 import psutil
 import subprocess
+from datetime import datetime
+from pathlib import Path
+import numpy as np
+from collections import defaultdict
 
 # 設定
-URL_BASE = "http://localhost:8080"
-CSV_FILE = "benchmark_results.csv"
+URL_BASE = os.getenv('LLAMA_SERVER_URL', "http://localhost:8080")
+RESULTS_DIR = os.getenv('RESULTS_DIR', "./benchmark_results")
 PROMPT = "Explain quantum mechanics in simple terms."
 N_RUNS = 100
 SERVER_PORT = 8080
 SERVER_STARTUP_WAIT = 15
+REQUEST_TIMEOUT = 120
 
 # 要測試的模型列表 (model_path, context_size)
-# 可以測試同一個模型在不同 context 下的性能
 MODELS = [
-    # Q4KM:
     ("./models/llama_quant/Llama3-8.0B-Q4_K_M.gguf", 2048),
-    ("./models/llama_quant/Llama3-8.0B-Q4_K_M.gguf", 4096),
-    ("./models/llama_quant/Llama3-8.0B-Q4_K_M.gguf", 8192),
-    # Q5KM:
     ("./models/llama_quant/Llama3-8.0B-Q5_K_M.gguf", 2048),
-    ("./models/llama_quant/Llama3-8.0B-Q5_K_M.gguf", 4096),
-    ("./models/llama_quant/Llama3-8.0B-Q5_K_M.gguf", 8192),
-    # Q6K:
     ("./models/llama_quant/Llama3-8.0B-Q6_K.gguf", 2048),
-    ("./models/llama_quant/Llama3-8.0B-Q6_K.gguf", 4096),
-    ("./models/llama_quant/Llama3-8.0B-Q6_K.gguf", 8192),
-    # Q8_0:
     ("./models/llama_quant/Llama3-8.0B-Q8_0.gguf", 2048),
-    ("./models/llama_quant/Llama3-8.0B-Q8_0.gguf", 4096),
-    ("./models/llama_quant/Llama3-8.0B-Q8_0.gguf", 8192),
 ]
+
+
+def ensure_results_dir():
+    """確保結果目錄存在"""
+    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
 
 # --- 0. 控制 server ---
 def kill_server():
