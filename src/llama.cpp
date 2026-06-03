@@ -276,10 +276,14 @@ static bool llama_prepare_model_devices(const llama_model_params & params, llama
 static std::pair<int, llama_model *> llama_model_load(struct gguf_context * metadata, llama_model_set_tensor_data_t set_tensor_data, void * set_tensor_data_ud,
         const std::string & fname, std::vector<std::string> & splits, FILE * file, llama_model_params & params) {
     try {
+        fprintf(stderr, "Will-test Starting llama_model_loader in llama.cpp\n");
+        fprintf(stderr, params.no_alloc ? "Will-test no_alloc is true" : "Will-test no_alloc is false"); // control check model header or loading model
+        fprintf(stderr, " in llama.cpp llama_model_load.\n");
         llama_model_loader ml(metadata, set_tensor_data, set_tensor_data_ud, fname, splits, file, params.use_mmap, params.use_direct_io,
             params.check_tensors, params.no_alloc, params.kv_overrides, params.tensor_buft_overrides);
-
+        fprintf(stderr, "Will-test llama_model_loader created.\n");
         ml.print_info();
+        fprintf(stderr, "========================================================================================\n");
         std::unique_ptr<llama_model> model_ptr(llama_model_create(ml, params));
 
         bool ok = llama_prepare_model_devices(params, model_ptr.get());

@@ -756,7 +756,7 @@ private:
         SRV_INF("loading model '%s'\n", params.model.path.c_str());
 
         params_base = params;
-
+        fprintf(stderr, "Will-test common_init_from_params\n");
         llama_init = common_init_from_params(params_base);
 
         model = llama_init->model();
@@ -766,7 +766,7 @@ private:
             SRV_ERR("failed to load model, '%s'\n", params_base.model.path.c_str());
             return false;
         }
-
+        fprintf(stderr, "Will-test get vocab\n");
         vocab = llama_model_get_vocab(model);
 
         n_ctx = llama_n_ctx(ctx);

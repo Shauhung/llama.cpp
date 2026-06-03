@@ -56,7 +56,7 @@ static std::vector<llama_device_memory_data> common_get_device_memory_data(
     mparams_copy.no_alloc  = true;
     mparams_copy.use_mmap  = false;
     mparams_copy.use_mlock = false;
-
+    fprintf(stderr, "Will-test Start common_get_device_memory_data llama_model_load_from_file fit.cpp.\n");
     llama_model * model = llama_model_load_from_file(path_model, mparams_copy);
     if (model == nullptr) {
         llama_log_set(ud.original_logger.callback, ud.original_logger.user_data);
@@ -170,6 +170,7 @@ static void common_params_fit_impl(
 
     LOG_INF("%s: getting device memory data for initial parameters:\n", __func__);
     const dmds_t dmds_full = common_get_device_memory_data(path_model, mparams, cparams, devs, hp_ngl, hp_nct, hp_nex, log_level);
+    fprintf(stderr, "Will-test Got device memory data for initial parameters.\n");
     const size_t nd = devs.size(); // number of devices
 
     std::vector<int64_t> margins; // this function uses int64_t rather than size_t for memory sizes to more conveniently handle deficits
@@ -775,6 +776,7 @@ enum common_params_fit_status common_fit_params(
     const int64_t t0_us = llama_time_us();
     common_params_fit_status status = COMMON_PARAMS_FIT_STATUS_SUCCESS;
     try {
+        fprintf(stderr, "Will-test Start common_params_fit_impl at fit.cpp.\n");
         common_params_fit_impl(path_model, mparams, cparams, tensor_split, tensor_buft_overrides, margins, n_ctx_min, log_level);
         LOG_INF("%s: successfully fit params to free device memory\n", __func__);
     } catch (const common_params_fit_exception & e) {

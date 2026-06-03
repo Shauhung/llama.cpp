@@ -1143,11 +1143,15 @@ struct common_init_result::impl {
 
 common_init_result::common_init_result(common_params & params) :
     pimpl(new impl{}) {
+    fprintf(stderr, "Will-test Start common_model_params_to_llama common.cpp.\n");
     auto mparams = common_model_params_to_llama(params);
+    fprintf(stderr, "Will-test Start common_context_params_to_llama common.cpp.\n");
     auto cparams = common_context_params_to_llama(params);
-
+    fprintf(stderr, "Will-test Finished common_context_params_to_llama common.cpp.\n");
     if (params.fit_params) {
+        fprintf(stderr, "Will-test Start common_fit_params auto modify available memory common.cpp.\n");
         LOG_INF("%s: fitting params to device memory, for bugs during this step try to reproduce them with -fit off, or provide --verbose logs if the bug only occurs with -fit on\n", __func__);
+        fprintf(stderr, "Will-test Start common_fit_params common.cpp.\n");
         common_fit_params(params.model.path.c_str(), &mparams, &cparams,
             params.tensor_split,
             params.tensor_buft_overrides.data(),
@@ -1155,8 +1159,9 @@ common_init_result::common_init_result(common_params & params) :
             params.fit_params_min_ctx,
             params.verbosity >= 4 ? GGML_LOG_LEVEL_DEBUG : GGML_LOG_LEVEL_ERROR);
     }
-
+    fprintf(stderr, "Will-test Run llama_model_load_from_file common.cpp.\n");
     llama_model * model = llama_model_load_from_file(params.model.path.c_str(), mparams);
+    fprintf(stderr, "Will-test Finished llama_model_load_from_file common.cpp.\n");
     if (model == NULL) {
         return;
     }
