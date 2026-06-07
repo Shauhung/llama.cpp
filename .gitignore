@@ -50,6 +50,7 @@
 /tags
 /.build/
 /build*
+/benchmark_results/
 /release
 /debug
 /libllama.so

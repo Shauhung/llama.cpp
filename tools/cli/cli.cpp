@@ -75,6 +75,7 @@ struct cli_context {
         // defaults.return_progress = true; // TODO: show progress
 
         verbose_prompt = params.verbose_prompt;
+        fprintf(stderr, "Will-test building cli_context struct...\n");
     }
 
     std::string generate_completion(result_timings & out_timings) {
@@ -360,8 +361,9 @@ int main(int argc, char ** argv) {
     }
 
     // struct that contains llama context and inference
+    fprintf(stderr, "Will-test Initializing CLI context...\n");
     cli_context ctx_cli(params);
-
+    fprintf(stderr, "Will-test CLI context initialized.\n");
     llama_backend_init();
     llama_numa_init(params.numa);
 
@@ -388,6 +390,7 @@ int main(int argc, char ** argv) {
 
     console::log("\nLoading model... "); // followed by loading animation
     console::spinner::start();
+    fprintf(stderr, "\nWill-test Loading model...\n");
     if (!ctx_cli.ctx_server.load_model(params)) {
         console::spinner::stop();
         console::error("\nFailed to load the model\n");
@@ -396,11 +399,11 @@ int main(int argc, char ** argv) {
 
     console::spinner::stop();
     console::log("\n");
-
+    fprintf(stderr, "Will-test start loop.\n");
     std::thread inference_thread([&ctx_cli]() {
         ctx_cli.ctx_server.start_loop();
     });
-
+    fprintf(stderr, "Will-test inference thread started.\n");
     auto inf = ctx_cli.ctx_server.get_meta();
     std::string modalities = "text";
     if (inf.has_inp_image) {

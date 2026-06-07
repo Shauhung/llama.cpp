@@ -3190,9 +3190,15 @@ void server_context::on_sleeping_changed(std::function<void(bool)> callback) {
 //
 
 std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
-            const server_http_req & req,
+            const server_http_req & req, // check connection status with req.should_stop()
             server_task_type type,
-            const json & data,
+            const json & data,  /*{
+                                "prompt": "<|user|>\n你好<|assistant|>\n",
+                                "temperature": 0.7,
+                                "max_tokens": 100,
+                                "stream": true,
+                                "stop": ["<|end|>"]
+                                }*/
             const std::vector<raw_buffer> & files,
             task_response_type res_type) {
     GGML_ASSERT(type == SERVER_TASK_TYPE_COMPLETION || type == SERVER_TASK_TYPE_INFILL);
@@ -3221,7 +3227,7 @@ std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
 
         // tasks.reserve(inputs.size()); // TODO: this is inaccurate due to child tasks
 
-        for (size_t i = 0; i < inputs.size(); i++) {
+        for (size_t i = 0; i < inputs.size(); i++) { // 這邊處理可能一次會有多個prompt的情況，例如OAI chat path裡面會有一個prompt是主體，另外一個prompt是system prompt，兩者會分開tokenize成兩個server_tokens，然後在server_task裡面合併成一個task來處理
             server_task task = server_task(type);
 
             task.id = rd.get_new_id();
@@ -3787,10 +3793,12 @@ void server_routes::init_routes() {
         auto res = create_response();
         std::vector<raw_buffer> files;
         json body = json::parse(req.body);
+        SRV_DBG("chat completions request: %s\n", body.dump(2).c_str());
         json body_parsed = oaicompat_chat_params_parse(
             body,
             meta->chat_params,
             files);
+        SRV_DBG("chat completions parsed request: %s\n", body_parsed.dump(2).c_str());
         return handle_completions_impl(
             req,
             SERVER_TASK_TYPE_COMPLETION,
