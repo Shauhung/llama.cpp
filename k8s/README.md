@@ -1,241 +1,194 @@
-# llama-bench on Kubernetes
+# llama-server on Kubernetes
 
-在 Kubernetes 中運行 llama-bench，並通過 Web Dashboard 查看結果。
+這個目錄放的是本地 Kubernetes / minikube 環境中啟動 `llama-server` 的設定。
 
-## 📋 前置要求
+主線是：
+
+```text
+Dockerfile build llama-server image
+  -> minikube 掛載本機 GGUF models 到 /models
+  -> Kubernetes Deployment 啟動 /app/llama-server
+  -> Service 暴露 8080
+  -> kubectl port-forward 到 localhost:8080
+```
+
+## 前置需求
 
 - Docker
-- Kubernetes cluster (minikube, Docker Desktop K8s, 或真實 K8s)
+- minikube 或其他 Kubernetes cluster
 - kubectl
+- 本機已有 GGUF 模型，例如：
 
-## 🚀 快速開始
-
-### 1️⃣ 構建 Docker Image
-
-```bash
-# 在 llama.cpp 目錄下
-docker build -t llama-bench:latest -f Dockerfile .
+```text
+/Users/username/code/cpp/llama.cpp/models/llama_quant/Llama3-8.0B-Q4_K_M.gguf
 ```
 
-如果用 minikube：
+## 快速開始
+
+### 1. 啟動 minikube 並掛載模型目錄
+
 ```bash
-# 讓 minikube 使用本地 Docker daemon
-eval $(minikube docker-env)
-docker build -t llama-bench:latest -f Dockerfile .
+minikube start \
+  --memory 16384 \
+  --mount \
+  --mount-string="/Users/username/code/cpp/llama.cpp/models/llama_quant:/models"
 ```
 
-### 2️⃣ 準備模型
+`k8s/manifest.yaml` 裡的 `hostPath` 使用 `/models`，這個路徑對應到 minikube VM
+裡的掛載點。容器內會把 `/models` 掛到 `/data`。
 
-你有幾個選擇：
+### 2. Build image
 
-#### 選項 A: 使用 HostPath（本地開發）
-編輯 `k8s/manifest.yaml`，將 PVC 改為 HostPath：
+在 llama.cpp repo root：
+
+```bash
+docker build -t my-llama-server:v1 -f Dockerfile .
+```
+
+如果 image 是 build 在本機 Docker daemon，而 cluster 是 minikube，記得載入：
+
+```bash
+minikube image load my-llama-server:v1
+```
+
+### 3. 部署 llama-server
+
+```bash
+kubectl apply -f k8s/manifest.yaml
+kubectl get pods
+```
+
+等 pod 變成 `Running`：
+
+```bash
+kubectl logs -f deployment/llama-server-deployment
+```
+
+### 4. Port forward
+
+```bash
+kubectl port-forward service/llama-server-service 8080:8080
+```
+
+然後可以測：
+
+```bash
+curl http://localhost:8080/v1/models
+```
+
+或呼叫 OpenAI-compatible chat endpoint：
+
+```bash
+curl http://localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {"role": "user", "content": "hello"}
+    ],
+    "max_tokens": 32
+  }'
+```
+
+## manifest 內容
+
+[manifest.yaml](manifest.yaml) 目前包含兩個資源：
+
+- `Deployment/llama-server-deployment`
+- `Service/llama-server-service`
+
+Deployment 使用 image：
 
 ```yaml
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: llama-models-pv
-spec:
-  capacity:
-    storage: 50Gi
-  accessModes:
-    - ReadOnlyMany
-  hostPath:
-    path: /path/to/your/models  # 改成你的模型路徑
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: llama-models
-spec:
-  accessModes:
-    - ReadOnlyMany
-  resources:
-    requests:
-      storage: 50Gi
-  volumeName: llama-models-pv
+image: my-llama-server:v1
+imagePullPolicy: Never
 ```
 
-#### 選項 B: 使用真實 Storage（生產環境）
-使用 NFS、EBS、GCE Persistent Disk 等
+啟動參數：
 
-### 3️⃣ 部署到 Kubernetes
-
-```bash
-# 應用 manifests
-kubectl apply -f k8s/manifest.yaml
-
-# 檢查狀態
-kubectl get ns llama-bench
-kubectl get all -n llama-bench
-
-# 查看 Job 日誌
-kubectl logs -n llama-bench -f job/llama-bench-job
-
-# 查看 Dashboard pod
-kubectl get pods -n llama-bench
-kubectl logs -n llama-bench deployment/llama-bench-dashboard
+```yaml
+args:
+  - "-m"
+  - "/data/Llama3-8.0B-Q4_K_M.gguf"
+  - "--host"
+  - "0.0.0.0"
+  - "--port"
+  - "8080"
+  - "-c"
+  - "4096"
+  - "-np"
+  - "1"
 ```
 
-### 4️⃣ 訪問 Web Dashboard
+模型 volume：
 
-```bash
-# 轉發端口
-kubectl port-forward -n llama-bench svc/llama-bench-dashboard 8080:80
-
-# 訪問
-open http://localhost:8080
+```yaml
+hostPath:
+  path: /models
 ```
 
-或者如果用 LoadBalancer：
-```bash
-kubectl get svc -n llama-bench llama-bench-dashboard
-# 獲取 EXTERNAL-IP，然後訪問
+容器內路徑：
+
+```yaml
+mountPath: /data
 ```
 
-## 📁 目錄結構
+## 修改模型或資源
 
-```
-llama.cpp/
-├── Dockerfile                    # 容器構建文件
-├── web_dashboard.py             # Web Dashboard Flask 應用
-├── llama_bench_runner.py        # llama-bench 運行器
-└── k8s/
-    ├── manifest.yaml            # K8s 資源清單
-    └── entrypoint.sh            # 容器入口腳本
+要換模型，改 `k8s/manifest.yaml` 的 `-m` 參數：
+
+```yaml
+- "-m"
+- "/data/your-model.gguf"
 ```
 
-## 🔧 自定義配置
+要調整 context：
 
-### 修改測試參數
-
-編輯 `llama_bench_runner.py` 中的 `TEST_CONFIGS`：
-
-```python
-TEST_CONFIGS = {
-    "your_test": {
-        "description": "Your Test Name",
-        "args": ["-n", "128", "-p", "512", "-ngl", "99"]
-    }
-}
+```yaml
+- "-c"
+- "4096"
 ```
 
-### 修改 Job 資源限制
-
-編輯 `k8s/manifest.yaml` 中的 `resources`：
+要調整資源：
 
 ```yaml
 resources:
   requests:
-    memory: "4Gi"
-    cpu: "4"
+    memory: "6Gi"
+    cpu: "2"
   limits:
     memory: "8Gi"
-    cpu: "8"
+    cpu: "4"
 ```
 
-## 📊 結果存儲
+## deploy.sh
 
-結果自動保存到 PVC `llama-bench-results` 中：
+可以用：
 
 ```bash
-# 獲取 results pod
-kubectl get pods -n llama-bench
-
-# 進入 pod 查看結果
-kubectl exec -it -n llama-bench <pod-name> -- bash
-ls -la /results/
+k8s/deploy.sh
 ```
 
-## 🐛 常見問題
+它會：
 
-### Q: 容器卡住了？
-```bash
-# 查看日誌
-kubectl logs -n llama-bench job/llama-bench-job
+1. build `my-llama-server:v1`
+2. 若有 minikube，載入 image
+3. `kubectl apply -f k8s/manifest.yaml`
+4. 等 deployment ready
+5. port-forward `localhost:8080 -> llama-server-service:8080`
 
-# 重新啟動
-kubectl delete -f k8s/manifest.yaml
-kubectl apply -f k8s/manifest.yaml
-```
-
-### Q: 模型找不到？
-- 確保 PVC 掛載正確
-- 檢查模型文件名是否匹配 `llama_bench_runner.py` 中的配置
-
-### Q: Web 顯示無數據？
-```bash
-# 確保 Dashboard pod 運行
-kubectl get pods -n llama-bench
-
-# 檢查 results PVC 中是否有 CSV 文件
-kubectl exec -it -n llama-bench deployment/llama-bench-dashboard -- ls -la /results/
-```
-
-## 🎯 進階用法
-
-### 使用 GPU
-
-編輯 `k8s/manifest.yaml` 的 Job spec：
-
-```yaml
-containers:
-- name: llama-bench
-  # ... 其他配置 ...
-  resources:
-    requests:
-      nvidia.com/gpu: 1
-    limits:
-      nvidia.com/gpu: 1
-```
-
-### 定期運行（CronJob）
-
-```yaml
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  name: llama-bench-daily
-  namespace: llama-bench
-spec:
-  schedule: "0 2 * * *"  # 每天 2:00 AM
-  jobTemplate:
-    spec:
-      template:
-        spec:
-          # ... 同 Job spec ...
-```
-
-## 📈 Dashboard 功能
-
-- 🎯 **實時圖表** - 生成速度、模型大小對比
-- 📊 **詳細表格** - 所有指標一覽
-- 🔄 **自動刷新** - 每 10 秒更新一次
-- 📱 **響應式設計** - 支持各種屏幕
-
-## 🧹 清理
+## 常用指令
 
 ```bash
-# 刪除所有資源
-kubectl delete namespace llama-bench
-
-# 或單獨刪除
+kubectl get deploy,svc,pods
+kubectl describe pod -l app=llama-server
+kubectl logs -f deployment/llama-server-deployment
+kubectl rollout restart deployment/llama-server-deployment
 kubectl delete -f k8s/manifest.yaml
 ```
 
-## 📚 相關資源
+## 清理
 
-- [Kubernetes Documentation](https://kubernetes.io/docs/)
-- [llama.cpp Repository](https://github.com/ggml-org/llama.cpp)
-- [Docker Documentation](https://docs.docker.com/)
-
-## 💡 提示
-
-1. **本地測試** - 用 `minikube` 或 Docker Desktop 先測試
-2. **監控** - 用 `kubectl top` 監控資源使用
-3. **持久化** - 結果存在 PVC 中，Pod 重啟不會丟失
-4. **並行運行** - 可以創建多個 Job，各自測試不同配置
-
-祝你學習 K8s 愉快! 🎉
+```bash
+kubectl delete -f k8s/manifest.yaml
+minikube stop
+```
